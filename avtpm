@@ -1,0 +1,106 @@
+from aiogram import Bot, Dispatcher, types
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.utils import executor
+import requests
+
+# Bot tokeni
+BOT_TOKEN = "7701948780:AAGUMDmSIaIWXGqmBtILS6_TyiGfw5lM2eE"
+ADMIN_ID = 5682528499
+SERVER_URL = "https://insurance.uz/api"
+
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher(bot)
+
+# Start komandasi
+def get_language_keyboard():
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.add("\ud83c\uddfa\ud83c\uddff O'zbek", "\ud83c\uddf7\ud83c\uddfa Русский")
+    keyboard.add("\ud83c\uddec\ud83c\udde7 English", "\ud83c\uddff\ud83c\uddff Qaraqalpaqsha")
+    return keyboard
+
+@dp.message_handler(commands=['start'])
+async def start_command(message: types.Message):
+    await message.answer("Tilni tanlang / Выберите язык / Select a language / Til ta\'la\u014b:",
+                         reply_markup=get_language_keyboard())
+
+# Til tanlash funksiyasi
+@dp.message_handler(lambda message: message.text in ["\ud83c\uddfa\ud83c\uddff O'zbek", "\ud83c\uddf7\ud83c\uddfa Русский", "\ud83c\uddec\ud83c\udde7 English", "\ud83c\uddff\ud83c\uddff Qaraqalpaqsha"])
+async def set_language(message: types.Message):
+    # Foydalanuvchi tanlagan tilni saqlash
+    lang = message.text
+    await message.answer("Telefon raqamingizni yuboring (namuna: +998901234567):", reply_markup=types.ReplyKeyboardRemove())
+
+# Telefon raqamni qabul qilish
+@dp.message_handler(lambda message: message.text.startswith('+998') and len(message.text) == 13)
+async def handle_phone_number(message: types.Message):
+    phone_number = message.text
+    # Telefon raqamini serverga yuborish mumkin
+    await message.answer("Avtomobil haqida ma'lumot yuboring:\nRasm yoki matn formatida tanlang:",
+                         reply_markup=get_file_upload_keyboard())
+
+def get_file_upload_keyboard():
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.add("\uD83D\uDDBC Rasm yuborish", "\u270F\uFE0F Matn ko'rinishida")
+    return keyboard
+
+# Rasm yuborish
+@dp.message_handler(content_types=['photo'])
+async def handle_photo(message: types.Message):
+    photo = message.photo[-1]
+    photo_path = await photo.download()
+    # Rasmni serverga yuborish
+    response = requests.post(f"{SERVER_URL}/upload", files={"file": open(photo_path.name, 'rb')})
+    if response.status_code == 200:
+        await message.answer("Ma'lumot serverga muvaffaqiyatli yuklandi. Davom etamiz.")
+    else:
+        await message.answer("Server bilan bog'lanishda xatolik yuz berdi.")
+
+# Matn ko'rinishida ma'lumot yuborish
+@dp.message_handler(lambda message: message.text)
+async def handle_text_info(message: types.Message):
+    data = message.text
+    # Ma'lumotni serverga yuborish
+    response = requests.post(f"{SERVER_URL}/text-info", json={"data": data})
+    if response.status_code == 200:
+        await message.answer("Ma'lumot serverga muvaffaqiyatli yuborildi. Keyingi bosqichga o'tamiz.")
+    else:
+        await message.answer("Server bilan bog'lanishda xatolik yuz berdi.")
+
+# Haydovchilar soni tanlash
+@dp.message_handler(commands=['drivers'])
+async def handle_drivers(message: types.Message):
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.add("1 haydovchi", "2 haydovchi", "3 haydovchi")
+    keyboard.add("4 haydovchi", "5 haydovchi", "Cheklovlarsiz")
+    await message.answer("Haydovchilar sonini tanlang:", reply_markup=keyboard)
+
+# Xarajatlarni hisoblash
+@dp.message_handler(commands=['calculate'])
+async def calculate_expenses(message: types.Message):
+    # Sug'urta muddati va boshqa ma'lumotlarni so'rash
+    await message.answer("Sug'urta boshlanish sanasini kiriting (YYYY-MM-DD):")
+
+# To'lovni amalga oshirish
+@dp.message_handler(commands=['payment'])
+async def handle_payment(message: types.Message):
+    # Serverdagi narxni hisoblash tugmasi bosiladi
+
+Avtomobil_sug'urta_uz, [02/01 2025 15:54]
+response = requests.get(f"{SERVER_URL}/calculate-price")
+    if response.status_code == 200:
+        price_info = response.json()
+        await message.answer(f"Sug'urta narxi: {price_info['price']} so'm. To'lovni amalga oshirdingizmi?", reply_markup=get_payment_keyboard())
+    else:
+        await message.answer("Narxni hisoblashda xatolik yuz berdi.")
+
+def get_payment_keyboard():
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.add("Ha", "Yo'q")
+    return keyboard
+
+# Adminga ma'lumot yuborish
+async def notify_admin(data):
+    await bot.send_message(ADMIN_ID, f"Foydalanuvchidan ma'lumotlar:\n{data}")
+
+if name == 'main':
+    executor.start_polling(dp, skip_updates=True)
